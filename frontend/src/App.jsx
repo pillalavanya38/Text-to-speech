@@ -1,13 +1,15 @@
+
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Login from "./Login";
 
-function App() {
+// Render deployed Spring Boot backend
+const API_BASE_URL = "https://text-to-speech-backend-2lf8.onrender.com";
 
+function App() {
   // =========================
   // LOGIN STATE
   // =========================
-
   const [isLoggedIn, setIsLoggedIn] = useState(
     localStorage.getItem("ttsLoggedIn") === "true"
   );
@@ -15,7 +17,6 @@ function App() {
   // =========================
   // TTS STATE
   // =========================
-
   const [text, setText] = useState("");
   const [language, setLanguage] = useState("en-US");
   const [voice, setVoice] = useState("female");
@@ -37,12 +38,10 @@ function App() {
   // =========================
   // LOGOUT
   // =========================
-
   const handleLogout = () => {
     localStorage.removeItem("ttsLoggedIn");
 
     setIsLoggedIn(false);
-
     setText("");
     setAudioUrl("");
     setHasGenerated(false);
@@ -52,41 +51,31 @@ function App() {
   // =========================
   // LOAD BROWSER VOICES
   // =========================
-
   useEffect(() => {
-
     const loadVoices = () => {
-
-      const availableVoices =
-        window.speechSynthesis.getVoices();
-
+      const availableVoices = window.speechSynthesis.getVoices();
       setVoices(availableVoices);
     };
 
     loadVoices();
 
-    window.speechSynthesis.onvoiceschanged =
-      loadVoices;
+    window.speechSynthesis.onvoiceschanged = loadVoices;
 
     return () => {
       window.speechSynthesis.onvoiceschanged = null;
     };
-
   }, []);
 
   // =========================
   // GENERATE SPEECH
   // =========================
-
   const handleGenerate = async () => {
-
     if (!text.trim()) {
       alert("Please enter some text first.");
       return;
     }
 
     try {
-
       setHasGenerated(false);
       setAudioUrl("");
       setIsSpeaking(false);
@@ -98,14 +87,12 @@ function App() {
       }
 
       const response = await fetch(
-        "http://localhost:8080/api/tts/generate",
+        `${API_BASE_URL}/api/tts/generate`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             text: text,
             language: language,
@@ -117,18 +104,16 @@ function App() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-
         alert(
           result.message ||
-          "Unable to generate audio."
+            "Unable to generate audio."
         );
-
         return;
       }
 
+      // Convert backend relative URL into complete Render URL
       const generatedAudioUrl =
-        "http://localhost:8080" +
-        result.audioUrl;
+        API_BASE_URL + result.audioUrl;
 
       setAudioUrl(generatedAudioUrl);
       setHasGenerated(true);
@@ -137,9 +122,7 @@ function App() {
         "Generated audio:",
         generatedAudioUrl
       );
-
     } catch (error) {
-
       console.error("Error:", error);
 
       alert(
@@ -151,9 +134,7 @@ function App() {
   // =========================
   // PLAY AUDIO
   // =========================
-
   const handlePlay = async () => {
-
     if (!audioUrl) {
       alert("Please generate speech first.");
       return;
@@ -167,7 +148,6 @@ function App() {
     }
 
     try {
-
       window.speechSynthesis.cancel();
 
       audio.load();
@@ -175,9 +155,7 @@ function App() {
       await audio.play();
 
       setIsSpeaking(true);
-
     } catch (error) {
-
       console.error(
         "Audio playback error:",
         error
@@ -192,9 +170,7 @@ function App() {
   // =========================
   // STOP AUDIO
   // =========================
-
   const handleStop = () => {
-
     window.speechSynthesis.cancel();
 
     const audio = audioRef.current;
@@ -210,9 +186,7 @@ function App() {
   // =========================
   // CLEAR
   // =========================
-
   const handleClear = () => {
-
     window.speechSynthesis.cancel();
 
     const audio = audioRef.current;
@@ -231,7 +205,6 @@ function App() {
   // =========================
   // SHOW LOGIN
   // =========================
-
   if (!isLoggedIn) {
     return (
       <Login
@@ -243,15 +216,11 @@ function App() {
   // =========================
   // TTS APPLICATION
   // =========================
-
   return (
-
     <div className="app">
-
       <div className="container">
 
         {/* Header */}
-
         <header className="header">
 
           <div className="header-top">
@@ -282,7 +251,6 @@ function App() {
         <main className="card">
 
           {/* Text Section */}
-
           <section className="text-section">
 
             <label htmlFor="text">
@@ -314,7 +282,6 @@ function App() {
           </section>
 
           {/* Language and Voice */}
-
           <section className="selectors">
 
             <div className="field">
@@ -392,7 +359,6 @@ function App() {
           </section>
 
           {/* Main Buttons */}
-
           <div className="actions">
 
             <button
@@ -412,7 +378,6 @@ function App() {
           </div>
 
           {/* Generated Audio */}
-
           <section className="audio-section">
 
             <h2>
@@ -420,7 +385,6 @@ function App() {
             </h2>
 
             {!hasGenerated && (
-
               <div className="audio-placeholder">
 
                 <p>
@@ -428,11 +392,9 @@ function App() {
                 </p>
 
               </div>
-
             )}
 
             {hasGenerated && audioUrl && (
-
               <div className="generated-audio">
 
                 <p>
@@ -459,14 +421,12 @@ function App() {
                   }
 
                   onError={(event) => {
-
                     console.error(
                       "Audio element error:",
                       event
                     );
 
                     setIsSpeaking(false);
-
                   }}
                 />
 
@@ -501,15 +461,12 @@ function App() {
                 </div>
 
                 {isSpeaking && (
-
                   <p>
                     🔊 Audio is playing...
                   </p>
-
                 )}
 
               </div>
-
             )}
 
           </section>
@@ -525,9 +482,9 @@ function App() {
         </footer>
 
       </div>
-
     </div>
   );
 }
 
 export default App;
+

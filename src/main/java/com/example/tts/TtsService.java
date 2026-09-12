@@ -1,4 +1,3 @@
-
 package com.example.tts;
 
 import org.springframework.stereotype.Service;
@@ -8,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,7 +31,7 @@ public class TtsService {
 
         if (apiKey == null || apiKey.isBlank()) {
             throw new IOException(
-                    "ELEVENLABS_API_KEY environment variable is not set."
+                    "ELEVENLABS_API_KEY environment variable is not set on the server."
             );
         }
 
@@ -43,10 +43,11 @@ public class TtsService {
         Path audioFile =
                 audioDirectory.resolve(fileName);
 
-        String jsonBody = "{"
-                + "\"text\":\"" + escapeJson(text) + "\","
-                + "\"model_id\":\"eleven_multilingual_v2\""
-                + "}";
+        String jsonBody =
+                "{"
+                        + "\"text\":\"" + escapeJson(text) + "\","
+                        + "\"model_id\":\"eleven_multilingual_v2\""
+                        + "}";
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(
@@ -71,7 +72,7 @@ public class TtsService {
             String errorMessage =
                     new String(
                             response.body(),
-                            java.nio.charset.StandardCharsets.UTF_8
+                            StandardCharsets.UTF_8
                     );
 
             throw new IOException(
@@ -112,51 +113,23 @@ public class TtsService {
                         ? "female"
                         : voice.trim().toLowerCase();
 
-        /*
-         * These are ElevenLabs voice IDs.
-         * We will replace them with the exact voices
-         * available in your ElevenLabs account if needed.
-         */
-
         switch (selectedLanguage) {
 
             case "en-US":
             case "en-IN":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "hi-IN":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "gu-IN":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "mr-IN":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "es-ES":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "fr-FR":
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
             case "de-DE":
+
                 return selectedVoice.equals("male")
                         ? "pNInz6obpgDQGcFmaJgB"
                         : "EXAVITQu4vr4xnSDxMaL";
 
             default:
+
                 throw new IllegalArgumentException(
                         "Unsupported language: "
                                 + selectedLanguage
@@ -166,6 +139,10 @@ public class TtsService {
 
     private String escapeJson(String text) {
 
+        if (text == null) {
+            return "";
+        }
+
         return text
                 .replace("\\", "\\\\")
                 .replace("\"", "\\\"")
@@ -174,4 +151,3 @@ public class TtsService {
                 .replace("\t", "\\t");
     }
 }
-
