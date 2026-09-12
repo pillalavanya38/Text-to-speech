@@ -1,4 +1,3 @@
-
 package com.example.tts;
 
 import org.springframework.core.io.FileSystemResource;
@@ -15,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tts")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "*")
 public class TtsController {
 
     private final TtsService ttsService;
@@ -127,7 +126,9 @@ public class TtsController {
                                 fileName +
                                 "\""
                 )
-                .contentType(MediaType.parseMediaType("audio/mpeg"))
+                .contentType(
+                        MediaType.parseMediaType("audio/mpeg")
+                )
                 .body(resource);
     }
 
@@ -165,8 +166,9 @@ public class TtsController {
                                 fileName +
                                 "\""
                 )
-                .contentType(MediaType.parseMediaType("audio/mpeg"))
+                .contentType(
+                        MediaType.parseMediaType("audio/mpeg")
+                )
                 .body(resource);
     }
 }
-
