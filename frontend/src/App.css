@@ -207,3 +207,41 @@ select:focus {
     gap: 4px;
   }
 }
+
+/* Login */
+.login-container {
+  max-width: 500px;
+  margin: 80px auto;
+}
+
+.login-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Top bar */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.top-bar h1 {
+  margin-bottom: 8px;
+}
+
+.logout-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.user-info {
+  margin: 15px 0 25px;
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+

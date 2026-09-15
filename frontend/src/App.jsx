@@ -1,7 +1,13 @@
+
 import "./App.css";
 import { useEffect, useRef, useState } from "react";
+import Login from "./Login";
 
 function App() {
+  const [loggedInUser, setLoggedInUser] = useState(
+    localStorage.getItem("ttsUser")
+  );
+
   const [text, setText] = useState("");
   const [language, setLanguage] = useState("en-IN");
   const [voice, setVoice] = useState("female");
@@ -12,6 +18,9 @@ function App() {
   const audioRef = useRef(null);
 
   const maxCharacters = 1000;
+
+  const API_URL =
+    import.meta.env.VITE_API_URL || "http://localhost:8080";
 
   const languages = [
     { value: "en-IN", label: "English" },
@@ -27,6 +36,24 @@ function App() {
     { value: "female", label: "Female" },
     { value: "male", label: "Male" },
   ];
+
+  const handleLogin = (email) => {
+    setLoggedInUser(email);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("ttsUser");
+    setLoggedInUser(null);
+
+    setText("");
+    setHasGenerated(false);
+
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+
+    setAudioUrl("");
+  };
 
   useEffect(() => {
     return () => {
@@ -57,7 +84,7 @@ function App() {
       }
 
       const response = await fetch(
-        "http://localhost:8080/api/tts/generate",
+        `${API_URL}/api/tts/generate`,
         {
           method: "POST",
           headers: {
@@ -79,19 +106,16 @@ function App() {
         );
       }
 
-      const generatedAudioUrl =
-        "http://localhost:8080" + data.audioUrl;
+      const generatedAudioUrl = `${API_URL}${data.audioUrl}`;
 
       setAudioUrl(generatedAudioUrl);
       setHasGenerated(true);
-
     } catch (error) {
       console.error("TTS Error:", error);
 
       alert(
         error.message || "Unable to generate speech."
       );
-
     } finally {
       setIsSpeaking(false);
     }
@@ -120,18 +144,35 @@ function App() {
 
   const characterCount = text.length;
 
+  if (!loggedInUser) {
+    return <Login onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app">
       <div className="container">
 
-        <h1>Text-to-Speech Application</h1>
+        <div className="top-bar">
+          <div>
+            <h1>Text-to-Speech Application</h1>
+            <p className="subtitle">
+              Convert your text into natural speech
+            </p>
+          </div>
 
-        <p className="subtitle">
-          Convert your text into natural speech
-        </p>
+          <button
+            className="logout-button"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
+
+        <div className="user-info">
+          Logged in as: <strong>{loggedInUser}</strong>
+        </div>
 
         <div className="form-group">
-
           <label htmlFor="text">
             Enter Text
           </label>
@@ -158,11 +199,9 @@ function App() {
               Characters: {characterCount}/{maxCharacters}
             </span>
           </div>
-
         </div>
 
         <div className="form-group">
-
           <label htmlFor="language">
             Select Language
           </label>
@@ -175,7 +214,6 @@ function App() {
               setHasGenerated(false);
             }}
           >
-
             {languages.map((item) => (
               <option
                 key={item.value}
@@ -184,13 +222,10 @@ function App() {
                 {item.label}
               </option>
             ))}
-
           </select>
-
         </div>
 
         <div className="form-group">
-
           <label htmlFor="voice">
             Select Voice
           </label>
@@ -203,7 +238,6 @@ function App() {
               setHasGenerated(false);
             }}
           >
-
             {voices.map((item) => (
               <option
                 key={item.value}
@@ -212,13 +246,10 @@ function App() {
                 {item.label}
               </option>
             ))}
-
           </select>
-
         </div>
 
         <div className="button-container">
-
           <button
             className="generate-button"
             onClick={handleGenerateSpeech}
@@ -235,7 +266,6 @@ function App() {
           >
             Clear
           </button>
-
         </div>
 
         {hasGenerated && (
@@ -246,7 +276,6 @@ function App() {
 
         {audioUrl && (
           <div className="audio-section">
-
             <h2>Generated Speech</h2>
 
             <audio
@@ -259,23 +288,20 @@ function App() {
             </audio>
 
             <div className="download-container">
-
               <a
-                href={audioUrl + "/download"}
+                href={`${audioUrl}/download`}
                 className="download-button"
                 download
               >
                 Download Audio
               </a>
-
             </div>
-
           </div>
         )}
-
       </div>
     </div>
   );
 }
 
 export default App;
+
