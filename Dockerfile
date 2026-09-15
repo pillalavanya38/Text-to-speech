@@ -7,10 +7,28 @@ COPY src ./src
 
 RUN mvn clean package -DskipTests
 
+
 FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 
+# Install Python and required packages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Piper TTS
+RUN pip3 install --break-system-packages --no-cache-dir piper-tts
+
+# Download Piper voices
+RUN python3 -m piper.download_voices es_ES-davefx-medium \
+    && python3 -m piper.download_voices es_AR-daniela-high \
+    && python3 -m piper.download_voices fr_FR-siwis-medium \
+    && python3 -m piper.download_voices fr_FR-gilles-low \
+    && python3 -m piper.download_voices de_DE-thorsten-medium \
+    && python3 -m piper.download_voices de_DE-kerstin-low
+
+# Copy Spring Boot JAR
 COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
