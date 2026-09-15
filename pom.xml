@@ -37,11 +37,11 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Microsoft Azure Speech SDK -->
+        <!-- JSON -->
         <dependency>
-            <groupId>com.microsoft.cognitiveservices.speech</groupId>
-            <artifactId>client-sdk</artifactId>
-            <version>1.51.0</version>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20250517</version>
         </dependency>
 
         <!-- Spring Boot DevTools -->
@@ -64,11 +64,6 @@
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-    <groupId>com.github.pemistahl</groupId>
-    <artifactId>lingua</artifactId>
-    <version>1.2.2</version>
-</dependency>
 
     </dependencies>
 

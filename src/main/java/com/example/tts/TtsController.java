@@ -82,8 +82,7 @@ public class TtsController {
 
             response.put(
                     "message",
-                    "Unable to generate audio: " +
-                            e.getMessage()
+                    "Unable to generate audio: " + e.getMessage()
             );
 
             return ResponseEntity
@@ -92,7 +91,7 @@ public class TtsController {
         }
     }
 
-    // Play / access generated MP3 file
+    // Play generated WAV audio
     @GetMapping("/audio/{fileName}")
     public ResponseEntity<Resource> getAudio(
             @PathVariable String fileName) {
@@ -104,13 +103,11 @@ public class TtsController {
             return ResponseEntity.badRequest().build();
         }
 
-        Path audioPath =
-                Paths.get("generated-audio")
-                        .resolve(fileName)
-                        .normalize();
+        Path audioPath = Paths.get("generated-audio")
+                .resolve(fileName)
+                .normalize();
 
-        Resource resource =
-                new FileSystemResource(audioPath);
+        Resource resource = new FileSystemResource(audioPath);
 
         if (!resource.exists() ||
                 !resource.isReadable()) {
@@ -122,17 +119,13 @@ public class TtsController {
                 .ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" +
-                                fileName +
-                                "\""
+                        "inline; filename=\"" + fileName + "\""
                 )
-                .contentType(
-                        MediaType.parseMediaType("audio/mpeg")
-                )
+                .contentType(MediaType.parseMediaType("audio/wav"))
                 .body(resource);
     }
 
-    // Download generated MP3 file
+    // Download generated WAV audio
     @GetMapping("/audio/{fileName}/download")
     public ResponseEntity<Resource> downloadAudio(
             @PathVariable String fileName) {
@@ -144,13 +137,11 @@ public class TtsController {
             return ResponseEntity.badRequest().build();
         }
 
-        Path audioPath =
-                Paths.get("generated-audio")
-                        .resolve(fileName)
-                        .normalize();
+        Path audioPath = Paths.get("generated-audio")
+                .resolve(fileName)
+                .normalize();
 
-        Resource resource =
-                new FileSystemResource(audioPath);
+        Resource resource = new FileSystemResource(audioPath);
 
         if (!resource.exists() ||
                 !resource.isReadable()) {
@@ -162,13 +153,9 @@ public class TtsController {
                 .ok()
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" +
-                                fileName +
-                                "\""
+                        "attachment; filename=\"" + fileName + "\""
                 )
-                .contentType(
-                        MediaType.parseMediaType("audio/mpeg")
-                )
+                .contentType(MediaType.parseMediaType("audio/wav"))
                 .body(resource);
     }
 }

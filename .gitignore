@@ -1,1 +1,21 @@
 generated-audio/ 
+# Maven
+target/
+
+# Generated audio
+generated-audio/
+*.wav
+
+# Piper voice models
+*.onnx
+*.onnx.json
+
+# Test files
+sarvam-test.json
+
+# Temporary files
+curl
+
+# Environment / secrets
+.env
+*.env

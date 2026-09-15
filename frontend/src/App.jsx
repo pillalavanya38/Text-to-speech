@@ -1,26 +1,10 @@
-
-import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import Login from "./Login";
-
-// Render deployed Spring Boot backend
-const API_BASE_URL = "https://text-to-speech-backend-2lf8.onrender.com";
+import { useEffect, useRef, useState } from "react";
 
 function App() {
-  // =========================
-  // LOGIN STATE
-  // =========================
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    localStorage.getItem("ttsLoggedIn") === "true"
-  );
-
-  // =========================
-  // TTS STATE
-  // =========================
   const [text, setText] = useState("");
-  const [language, setLanguage] = useState("en-US");
+  const [language, setLanguage] = useState("en-IN");
   const [voice, setVoice] = useState("female");
-  const [voices, setVoices] = useState([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
@@ -29,65 +13,51 @@ function App() {
 
   const maxCharacters = 1000;
 
-  const wordCount = text.trim()
-    ? text.trim().split(/\s+/).length
-    : 0;
+  const languages = [
+    { value: "en-IN", label: "English" },
+    { value: "hi-IN", label: "Hindi" },
+    { value: "gu-IN", label: "Gujarati" },
+    { value: "mr-IN", label: "Marathi" },
+    { value: "es-ES", label: "Spanish" },
+    { value: "fr-FR", label: "French" },
+    { value: "de-DE", label: "German" },
+  ];
 
-  const characterCount = text.length;
+  const voices = [
+    { value: "female", label: "Female" },
+    { value: "male", label: "Male" },
+  ];
 
-  // =========================
-  // LOGOUT
-  // =========================
-  const handleLogout = () => {
-    localStorage.removeItem("ttsLoggedIn");
-
-    setIsLoggedIn(false);
-    setText("");
-    setAudioUrl("");
-    setHasGenerated(false);
-    setIsSpeaking(false);
-  };
-
-  // =========================
-  // LOAD BROWSER VOICES
-  // =========================
   useEffect(() => {
-    const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-    };
-
-    loadVoices();
-
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-
     return () => {
-      window.speechSynthesis.onvoiceschanged = null;
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
     };
-  }, []);
+  }, [audioUrl]);
 
-  // =========================
-  // GENERATE SPEECH
-  // =========================
-  const handleGenerate = async () => {
+  const handleGenerateSpeech = async () => {
     if (!text.trim()) {
-      alert("Please enter some text first.");
+      alert("Please enter some text.");
+      return;
+    }
+
+    if (text.length > maxCharacters) {
+      alert("Text cannot exceed 1000 characters.");
       return;
     }
 
     try {
+      setIsSpeaking(true);
       setHasGenerated(false);
-      setAudioUrl("");
-      setIsSpeaking(false);
 
-      // Stop previous audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl("");
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/api/tts/generate`,
+        "http://localhost:8080/api/tts/generate",
         {
           method: "POST",
           headers: {
@@ -101,385 +71,207 @@ function App() {
         }
       );
 
-      const result = await response.json();
+      const data = await response.json();
 
-      if (!response.ok || !result.success) {
-        alert(
-          result.message ||
-            "Unable to generate audio."
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Unable to generate speech."
         );
-        return;
       }
 
-      // Convert backend relative URL into complete Render URL
       const generatedAudioUrl =
-        API_BASE_URL + result.audioUrl;
+        "http://localhost:8080" + data.audioUrl;
 
       setAudioUrl(generatedAudioUrl);
       setHasGenerated(true);
 
-      console.log(
-        "Generated audio:",
-        generatedAudioUrl
-      );
     } catch (error) {
-      console.error("Error:", error);
+      console.error("TTS Error:", error);
 
       alert(
-        "Could not connect to the Spring Boot server."
+        error.message || "Unable to generate speech."
       );
+
+    } finally {
+      setIsSpeaking(false);
     }
   };
 
-  // =========================
-  // PLAY AUDIO
-  // =========================
-  const handlePlay = async () => {
-    if (!audioUrl) {
-      alert("Please generate speech first.");
-      return;
-    }
-
-    const audio = audioRef.current;
-
-    if (!audio) {
-      alert("Audio player is not available.");
-      return;
-    }
-
-    try {
-      window.speechSynthesis.cancel();
-
-      audio.load();
-
-      await audio.play();
-
-      setIsSpeaking(true);
-    } catch (error) {
-      console.error(
-        "Audio playback error:",
-        error
-      );
-
-      alert(
-        "Unable to play the audio. Please try the Play button on the audio player."
-      );
-    }
-  };
-
-  // =========================
-  // STOP AUDIO
-  // =========================
-  const handleStop = () => {
-    window.speechSynthesis.cancel();
-
-    const audio = audioRef.current;
-
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-
-    setIsSpeaking(false);
-  };
-
-  // =========================
-  // CLEAR
-  // =========================
   const handleClear = () => {
-    window.speechSynthesis.cancel();
+    setText("");
+    setHasGenerated(false);
 
-    const audio = audioRef.current;
-
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
     }
 
-    setIsSpeaking(false);
-    setHasGenerated(false);
     setAudioUrl("");
-    setText("");
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
   };
 
-  // =========================
-  // SHOW LOGIN
-  // =========================
-  if (!isLoggedIn) {
-    return (
-      <Login
-        onLogin={() => setIsLoggedIn(true)}
-      />
-    );
-  }
+  const wordCount =
+    text.trim() === ""
+      ? 0
+      : text.trim().split(/\s+/).length;
 
-  // =========================
-  // TTS APPLICATION
-  // =========================
+  const characterCount = text.length;
+
   return (
     <div className="app">
       <div className="container">
 
-        {/* Header */}
-        <header className="header">
+        <h1>Text-to-Speech Application</h1>
 
-          <div className="header-top">
+        <p className="subtitle">
+          Convert your text into natural speech
+        </p>
 
-            <div className="logo">
-              🔊
-            </div>
+        <div className="form-group">
 
-            <button
-              className="logout-button"
-              onClick={handleLogout}
-            >
-              🚪 Logout
-            </button>
+          <label htmlFor="text">
+            Enter Text
+          </label>
 
-          </div>
-
-          <h1>
-            Text to Speech
-          </h1>
-
-          <p>
-            Convert your text into natural-sounding speech
-          </p>
-
-        </header>
-
-        <main className="card">
-
-          {/* Text Section */}
-          <section className="text-section">
-
-            <label htmlFor="text">
-              Enter your text
-            </label>
-
-            <textarea
-              id="text"
-              value={text}
-              onChange={(e) =>
-                setText(e.target.value)
+          <textarea
+            id="text"
+            value={text}
+            onChange={(e) => {
+              if (e.target.value.length <= maxCharacters) {
+                setText(e.target.value);
+                setHasGenerated(false);
               }
-              maxLength={maxCharacters}
-              placeholder="Type or paste your text here..."
-            />
+            }}
+            placeholder="Enter the text you want to convert into speech..."
+            rows="8"
+          />
 
-            <div className="text-info">
+          <div className="counter">
+            <span>
+              Words: {wordCount}
+            </span>
 
-              <span>
-                {characterCount} / {maxCharacters} characters
-              </span>
-
-              <span>
-                {wordCount} words
-              </span>
-
-            </div>
-
-          </section>
-
-          {/* Language and Voice */}
-          <section className="selectors">
-
-            <div className="field">
-
-              <label htmlFor="language">
-                Language
-              </label>
-
-              <select
-                id="language"
-                value={language}
-                onChange={(e) =>
-                  setLanguage(e.target.value)
-                }
-              >
-
-                <option value="en-US">
-                  English
-                </option>
-
-                <option value="hi-IN">
-                  Hindi
-                </option>
-
-                <option value="gu-IN">
-                  Gujarati
-                </option>
-
-                <option value="mr-IN">
-                  Marathi
-                </option>
-
-                <option value="es-ES">
-                  Spanish
-                </option>
-
-                <option value="fr-FR">
-                  French
-                </option>
-
-                <option value="de-DE">
-                  German
-                </option>
-
-              </select>
-
-            </div>
-
-            <div className="field">
-
-              <label htmlFor="voice">
-                Voice
-              </label>
-
-              <select
-                id="voice"
-                value={voice}
-                onChange={(e) =>
-                  setVoice(e.target.value)
-                }
-              >
-
-                <option value="female">
-                  Female Voice
-                </option>
-
-                <option value="male">
-                  Male Voice
-                </option>
-
-              </select>
-
-            </div>
-
-          </section>
-
-          {/* Main Buttons */}
-          <div className="actions">
-
-            <button
-              className="generate-button"
-              onClick={handleGenerate}
-            >
-              🔊 Generate Speech
-            </button>
-
-            <button
-              className="clear-button"
-              onClick={handleClear}
-            >
-              Clear
-            </button>
-
+            <span>
+              Characters: {characterCount}/{maxCharacters}
+            </span>
           </div>
 
-          {/* Generated Audio */}
-          <section className="audio-section">
+        </div>
 
-            <h2>
-              🎵 Generated Audio
-            </h2>
+        <div className="form-group">
 
-            {!hasGenerated && (
-              <div className="audio-placeholder">
+          <label htmlFor="language">
+            Select Language
+          </label>
 
-                <p>
-                  Your generated audio will appear here.
-                </p>
+          <select
+            id="language"
+            value={language}
+            onChange={(e) => {
+              setLanguage(e.target.value);
+              setHasGenerated(false);
+            }}
+          >
 
-              </div>
-            )}
+            {languages.map((item) => (
+              <option
+                key={item.value}
+                value={item.value}
+              >
+                {item.label}
+              </option>
+            ))}
 
-            {hasGenerated && audioUrl && (
-              <div className="generated-audio">
+          </select>
 
-                <p>
-                  ✅ Speech generated successfully.
-                </p>
+        </div>
 
-                <audio
-                  ref={audioRef}
-                  key={audioUrl}
-                  src={audioUrl}
-                  controls
-                  preload="auto"
+        <div className="form-group">
 
-                  onPlay={() =>
-                    setIsSpeaking(true)
-                  }
+          <label htmlFor="voice">
+            Select Voice
+          </label>
 
-                  onPause={() =>
-                    setIsSpeaking(false)
-                  }
+          <select
+            id="voice"
+            value={voice}
+            onChange={(e) => {
+              setVoice(e.target.value);
+              setHasGenerated(false);
+            }}
+          >
 
-                  onEnded={() =>
-                    setIsSpeaking(false)
-                  }
+            {voices.map((item) => (
+              <option
+                key={item.value}
+                value={item.value}
+              >
+                {item.label}
+              </option>
+            ))}
 
-                  onError={(event) => {
-                    console.error(
-                      "Audio element error:",
-                      event
-                    );
+          </select>
 
-                    setIsSpeaking(false);
-                  }}
-                />
+        </div>
 
-                <div className="audio-controls">
+        <div className="button-container">
 
-                  <button
-                    type="button"
-                    className="download-button"
-                    onClick={handlePlay}
-                  >
-                    ▶ Play Speech
-                  </button>
+          <button
+            className="generate-button"
+            onClick={handleGenerateSpeech}
+            disabled={isSpeaking}
+          >
+            {isSpeaking
+              ? "Generating..."
+              : "Generate Speech"}
+          </button>
 
-                  <button
-                    type="button"
-                    className="download-button"
-                    onClick={handleStop}
-                  >
-                    ⏹ Stop Speech
-                  </button>
+          <button
+            className="clear-button"
+            onClick={handleClear}
+          >
+            Clear
+          </button>
 
-                  <a
-                    className="download-button"
-                    href={
-                      audioUrl + "/download"
-                    }
-                    download
-                  >
-                    ⬇️ Download Audio
-                  </a>
+        </div>
 
-                </div>
+        {hasGenerated && (
+          <div className="success-message">
+            Speech generated successfully.
+          </div>
+        )}
 
-                {isSpeaking && (
-                  <p>
-                    🔊 Audio is playing...
-                  </p>
-                )}
+        {audioUrl && (
+          <div className="audio-section">
 
-              </div>
-            )}
+            <h2>Generated Speech</h2>
 
-          </section>
+            <audio
+              ref={audioRef}
+              controls
+              src={audioUrl}
+              className="audio-player"
+            >
+              Your browser does not support the audio element.
+            </audio>
 
-        </main>
+            <div className="download-container">
 
-        <footer>
+              <a
+                href={audioUrl + "/download"}
+                className="download-button"
+                download
+              >
+                Download Audio
+              </a>
 
-          <p>
-            Text-to-Speech Application
-          </p>
+            </div>
 
-        </footer>
+          </div>
+        )}
 
       </div>
     </div>
@@ -487,4 +279,3 @@ function App() {
 }
 
 export default App;
-

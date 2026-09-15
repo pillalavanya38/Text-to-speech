@@ -1,11 +1,5 @@
 package com.example.tts;
 
-import com.github.pemistahl.lingua.api.Language;
-import com.github.pemistahl.lingua.api.LanguageDetector;
-import com.github.pemistahl.lingua.api.LanguageDetectorBuilder;
-
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -15,357 +9,308 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Base64;
 
-import static com.github.pemistahl.lingua.api.Language.ENGLISH;
-import static com.github.pemistahl.lingua.api.Language.FRENCH;
-import static com.github.pemistahl.lingua.api.Language.GERMAN;
-import static com.github.pemistahl.lingua.api.Language.GUJARATI;
-import static com.github.pemistahl.lingua.api.Language.HINDI;
-import static com.github.pemistahl.lingua.api.Language.MARATHI;
-import static com.github.pemistahl.lingua.api.Language.SPANISH;
+import org.json.JSONObject;
+import org.springframework.stereotype.Service;
 
 @Service
 public class TtsService {
 
-    private final Path audioDirectory =
-            Paths.get("generated-audio");
-
-    private final String apiKey =
-            System.getenv("ELEVENLABS_API_KEY");
-
-    private final HttpClient httpClient =
-            HttpClient.newHttpClient();
-
-    /*
-     * Language detector.
-     *
-     * It checks only the languages supported
-     * by our TTS application.
-     */
-    private final LanguageDetector languageDetector =
-            LanguageDetectorBuilder
-                    .fromLanguages(
-                            ENGLISH,
-                            HINDI,
-                            GUJARATI,
-                            MARATHI,
-                            SPANISH,
-                            FRENCH,
-                            GERMAN
-                    )
-                    .build();
+    private final Path audioDirectory = Paths.get("generated-audio");
 
     public String generateAudio(
             String text,
             String language,
             String voice
-    ) throws IOException, InterruptedException {
+    ) throws IOException {
 
         Files.createDirectories(audioDirectory);
 
-        // Check ElevenLabs API key
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IOException(
-                    "ELEVENLABS_API_KEY environment variable is not set on the server."
-            );
+        if (text == null || text.trim().isEmpty()) {
+            throw new IOException("Text cannot be empty");
         }
 
-        // Validate selected language and entered text
-        validateLanguage(text, language);
+        if (text.length() > 1000) {
+            throw new IOException("Text cannot exceed 1000 characters");
+        }
 
-        // Get ElevenLabs voice ID
-        String voiceId =
-                getVoiceId(language, voice);
+        String fileName = "speech-" + System.currentTimeMillis() + ".wav";
+        Path audioFile = audioDirectory.resolve(fileName);
 
-        // Create unique audio file name
-        String fileName =
-                "speech-" + System.currentTimeMillis() + ".mp3";
+        try {
+            if (language.equalsIgnoreCase("en-IN")
+                    || language.equalsIgnoreCase("hi-IN")
+                    || language.equalsIgnoreCase("gu-IN")
+                    || language.equalsIgnoreCase("mr-IN")) {
 
-        Path audioFile =
-                audioDirectory.resolve(fileName);
+                generateWithSarvam(text, language, voice, audioFile);
 
-        // ElevenLabs request body
-        String jsonBody =
-                "{"
-                        + "\"text\":\""
-                        + escapeJson(text)
-                        + "\","
-                        + "\"model_id\":\"eleven_multilingual_v2\""
-                        + "}";
+            } else if (language.equalsIgnoreCase("es-ES")
+                    || language.equalsIgnoreCase("fr-FR")
+                    || language.equalsIgnoreCase("de-DE")) {
 
-        // ElevenLabs API request
-        HttpRequest request =
-                HttpRequest.newBuilder()
-                        .uri(
-                                URI.create(
-                                        "https://api.elevenlabs.io/v1/text-to-speech/"
-                                                + voiceId
-                                )
-                        )
-                        .header(
-                                "xi-api-key",
-                                apiKey
-                        )
-                        .header(
-                                "Content-Type",
-                                "application/json"
-                        )
-                        .header(
-                                "Accept",
-                                "audio/mpeg"
-                        )
-                        .POST(
-                                HttpRequest.BodyPublishers.ofString(
-                                        jsonBody
-                                )
-                        )
-                        .build();
+                generateWithPiper(text, language, voice, audioFile);
 
-        // Send request to ElevenLabs
-        HttpResponse<byte[]> response =
-                httpClient.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofByteArray()
+            } else {
+                throw new IOException(
+                        "Unsupported language: " + language
                 );
+            }
 
-        // Handle ElevenLabs errors
-        if (response.statusCode() < 200 ||
-                response.statusCode() >= 300) {
-
-            String errorMessage =
-                    new String(
-                            response.body(),
-                            StandardCharsets.UTF_8
-                    );
-
-            throw new IOException(
-                    "ElevenLabs API error "
-                            + response.statusCode()
-                            + ": "
-                            + errorMessage
-            );
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("TTS process was interrupted", e);
         }
 
-        // Save generated audio
-        Files.write(
-                audioFile,
-                response.body()
-        );
-
-        // Check generated file
-        if (!Files.exists(audioFile) ||
-                Files.size(audioFile) == 0) {
-
-            Files.deleteIfExists(audioFile);
-
-            throw new IOException(
-                    "ElevenLabs generated an empty audio file."
-            );
+        if (!Files.exists(audioFile) || Files.size(audioFile) == 0) {
+            throw new IOException("Audio file was not generated");
         }
 
         return fileName;
     }
 
-    /**
-     * Detects the actual language of the entered text
-     * and compares it with the language selected by
-     * the user.
-     */
-    private void validateLanguage(
+    // ============================================================
+    // SARVAM TTS
+    // English, Hindi, Gujarati, Marathi
+    // ============================================================
+
+    private void generateWithSarvam(
             String text,
-            String language
-    ) {
-
-        if (language == null ||
-                language.trim().isEmpty()) {
-
-            throw new IllegalArgumentException(
-                    "Please select a language."
-            );
-        }
-
-        if (text == null ||
-                text.trim().isEmpty()) {
-
-            throw new IllegalArgumentException(
-                    "Please enter some text."
-            );
-        }
-
-        String selectedLanguage =
-                language.trim();
-
-        /*
-         * Detect actual language.
-         */
-        Language detectedLanguage =
-                languageDetector.detectLanguageOf(
-                        text.trim()
-                );
-
-        /*
-         * Convert selected language code
-         * to Lingua language.
-         */
-        Language expectedLanguage =
-                getExpectedLanguage(
-                        selectedLanguage
-                );
-
-        /*
-         * Compare selected language
-         * with detected language.
-         */
-        if (detectedLanguage != expectedLanguage) {
-
-            throw new IllegalArgumentException(
-                    "Language mismatch. You selected "
-                            + getLanguageName(expectedLanguage)
-                            + " but the entered text appears to be "
-                            + getLanguageName(detectedLanguage)
-                            + ". Please enter text in "
-                            + getLanguageName(expectedLanguage)
-                            + "."
-            );
-        }
-    }
-
-    /**
-     * Converts frontend language code
-     * into Lingua language.
-     */
-    private Language getExpectedLanguage(
-            String language
-    ) {
-
-        switch (language) {
-
-            case "en-US":
-            case "en-IN":
-                return ENGLISH;
-
-            case "hi-IN":
-                return HINDI;
-
-            case "gu-IN":
-                return GUJARATI;
-
-            case "mr-IN":
-                return MARATHI;
-
-            case "es-ES":
-                return SPANISH;
-
-            case "fr-FR":
-                return FRENCH;
-
-            case "de-DE":
-                return GERMAN;
-
-            default:
-                throw new IllegalArgumentException(
-                        "Unsupported language: "
-                                + language
-                );
-        }
-    }
-
-    /**
-     * Returns a user-friendly language name.
-     */
-    private String getLanguageName(
-            Language language
-    ) {
-
-        switch (language) {
-
-            case ENGLISH:
-                return "English";
-
-            case HINDI:
-                return "Hindi";
-
-            case GUJARATI:
-                return "Gujarati";
-
-            case MARATHI:
-                return "Marathi";
-
-            case SPANISH:
-                return "Spanish";
-
-            case FRENCH:
-                return "French";
-
-            case GERMAN:
-                return "German";
-
-            default:
-                return language.name();
-        }
-    }
-
-    /**
-     * Returns the ElevenLabs voice ID.
-     */
-    private String getVoiceId(
             String language,
-            String voice
-    ) {
+            String voice,
+            Path audioFile
+    ) throws IOException, InterruptedException {
 
-        String selectedLanguage =
-                language == null ||
-                        language.trim().isEmpty()
-                        ? "en-US"
-                        : language.trim();
+        String apiKey = System.getenv("SARVAM_API_KEY");
 
-        String selectedVoice =
-                voice == null ||
-                        voice.trim().isEmpty()
-                        ? "female"
-                        : voice.trim().toLowerCase();
-
-        switch (selectedLanguage) {
-
-            case "en-US":
-            case "en-IN":
-            case "hi-IN":
-            case "gu-IN":
-            case "mr-IN":
-            case "es-ES":
-            case "fr-FR":
-            case "de-DE":
-
-                return selectedVoice.equals("male")
-                        ? "pNInz6obpgDQGcFmaJgB"
-                        : "EXAVITQu4vr4xnSDxMaL";
-
-            default:
-
-                throw new IllegalArgumentException(
-                        "Unsupported language: "
-                                + selectedLanguage
-                );
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IOException(
+                    "SARVAM_API_KEY environment variable is not set"
+            );
         }
+
+        String speaker;
+
+        if (voice != null && voice.equalsIgnoreCase("male")) {
+            speaker = "ratan";
+        } else {
+            speaker = "priya";
+        }
+
+        JSONObject requestJson = new JSONObject();
+
+        requestJson.put("text", text);
+        requestJson.put("target_language_code", language);
+        requestJson.put("speaker", speaker);
+        requestJson.put("model", "bulbul:v3");
+        requestJson.put("speech_sample_rate", 22050);
+        requestJson.put("output_audio_codec", "wav");
+
+        System.out.println(
+                "Sarvam language: " + language
+                        + " | Voice: " + voice
+                        + " | Speaker: " + speaker
+        );
+
+        HttpClient client = HttpClient.newHttpClient();
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(
+                        "https://api.sarvam.ai/text-to-speech"
+                ))
+                .header(
+                        "api-subscription-key",
+                        apiKey
+                )
+                .header(
+                        "Content-Type",
+                        "application/json"
+                )
+                .POST(
+                        HttpRequest.BodyPublishers.ofString(
+                                requestJson.toString()
+                        )
+                )
+                .build();
+
+        HttpResponse<String> response =
+                client.send(
+                        request,
+                        HttpResponse.BodyHandlers.ofString()
+                );
+
+        System.out.println(
+                "Sarvam response status: "
+                        + response.statusCode()
+        );
+
+        if (response.statusCode() < 200
+                || response.statusCode() >= 300) {
+
+            throw new IOException(
+                    "Sarvam TTS failed: "
+                            + response.body()
+            );
+        }
+
+        JSONObject responseJson =
+                new JSONObject(response.body());
+
+        if (!responseJson.has("audios")) {
+            throw new IOException(
+                    "Sarvam response does not contain audio"
+            );
+        }
+
+        String base64Audio =
+                responseJson
+                        .getJSONArray("audios")
+                        .getString(0);
+
+        byte[] audioBytes =
+                Base64.getDecoder().decode(base64Audio);
+
+        Files.write(audioFile, audioBytes);
     }
 
-    /**
-     * Escapes special characters before
-     * putting text inside JSON.
-     */
-    private String escapeJson(
-            String text
-    ) {
+    // ============================================================
+    // PIPER TTS
+    // Spanish, French, German
+    // ============================================================
 
-        if (text == null) {
-            return "";
+    private void generateWithPiper(
+            String text,
+            String language,
+            String voice,
+            Path audioFile
+    ) throws IOException, InterruptedException {
+
+        boolean isMale =
+                voice != null
+                        && voice.equalsIgnoreCase("male");
+
+        String model;
+
+        // --------------------------------------------------------
+        // SPANISH
+        // --------------------------------------------------------
+        if (language.equalsIgnoreCase("es-ES")) {
+
+            if (isMale) {
+                model = "es_ES-davefx-medium";
+            } else {
+                model = "es_AR-daniela-high";
+            }
+
+        // --------------------------------------------------------
+        // FRENCH
+        // --------------------------------------------------------
+        } else if (language.equalsIgnoreCase("fr-FR")) {
+
+            if (isMale) {
+                model = "fr_FR-siwis-medium";
+            } else {
+                model = "fr_FR-gilles-low";
+            }
+
+        // --------------------------------------------------------
+        // GERMAN
+        // --------------------------------------------------------
+        } else if (language.equalsIgnoreCase("de-DE")) {
+
+            if (isMale) {
+                model = "de_DE-thorsten-medium";
+            } else {
+                model = "de_DE-kerstin-low";
+            }
+
+        } else {
+            throw new IOException(
+                    "Piper does not support language: "
+                            + language
+            );
         }
 
-        return text
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        System.out.println(
+                "========================================"
+        );
+
+        System.out.println(
+                "Piper language: " + language
+        );
+
+        System.out.println(
+                "Selected voice: " + voice
+        );
+
+        System.out.println(
+                "Selected Piper model: " + model
+        );
+
+        System.out.println(
+                "========================================"
+        );
+
+        ProcessBuilder processBuilder =
+                new ProcessBuilder(
+                        "python",
+                        "-m",
+                        "piper",
+                        "-m",
+                        model,
+                        "--output_file",
+                        audioFile.toAbsolutePath().toString()
+                );
+
+        processBuilder.redirectErrorStream(true);
+
+        Process process =
+                processBuilder.start();
+
+        // Send text to Piper
+        process.getOutputStream().write(
+                text.getBytes(StandardCharsets.UTF_8)
+        );
+
+        process.getOutputStream().close();
+
+        // Read Piper output
+        String output =
+                new String(
+                        process.getInputStream().readAllBytes(),
+                        StandardCharsets.UTF_8
+                );
+
+        int exitCode = process.waitFor();
+
+        System.out.println(
+                "Piper exit code: " + exitCode
+        );
+
+        if (!output.trim().isEmpty()) {
+            System.out.println(
+                    "Piper output: " + output
+            );
+        }
+
+        if (exitCode != 0) {
+            throw new IOException(
+                    "Piper TTS failed: " + output
+            );
+        }
+
+        if (!Files.exists(audioFile)
+                || Files.size(audioFile) == 0) {
+
+            throw new IOException(
+                    "Piper did not generate audio file"
+            );
+        }
+
+        System.out.println(
+                "Piper audio generated successfully: "
+                        + audioFile
+        );
     }
 }
