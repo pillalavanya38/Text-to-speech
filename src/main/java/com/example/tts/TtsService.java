@@ -1,282 +1,75 @@
 package com.example.tts;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Base64;
 
-import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TtsService {
 
-    private final Path audioDirectory = Paths.get("generated-audio");
-
     public String generateAudio(
             String text,
             String language,
-            String voice
-    ) throws IOException {
+            String voice) throws Exception {
 
-        Files.createDirectories(audioDirectory);
-
-        if (text == null || text.trim().isEmpty()) {
-            throw new IOException("Text cannot be empty");
-        }
-
-        if (text.length() > 1000) {
-            throw new IOException("Text cannot exceed 1000 characters");
-        }
-
-        String fileName = "speech-" + System.currentTimeMillis() + ".wav";
-        Path audioFile = audioDirectory.resolve(fileName);
-
-        try {
-            if (language.equalsIgnoreCase("en-IN")
-                    || language.equalsIgnoreCase("hi-IN")
-                    || language.equalsIgnoreCase("gu-IN")
-                    || language.equalsIgnoreCase("mr-IN")) {
-
-                generateWithSarvam(text, language, voice, audioFile);
-
-            } else if (language.equalsIgnoreCase("es-ES")
-                    || language.equalsIgnoreCase("fr-FR")
-                    || language.equalsIgnoreCase("de-DE")) {
-
-                generateWithPiper(text, language, voice, audioFile);
-
-            } else {
-                throw new IOException(
-                        "Unsupported language: " + language
-                );
-            }
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("TTS process was interrupted", e);
-        }
-
-        if (!Files.exists(audioFile) || Files.size(audioFile) == 0) {
-            throw new IOException("Audio file was not generated");
-        }
-
-        return fileName;
+        return generateWithPiper(text, language, voice);
     }
 
-    // ============================================================
-    // SARVAM TTS
-    // English, Hindi, Gujarati, Marathi
-    // ============================================================
-
-    private void generateWithSarvam(
+    private String generateWithPiper(
             String text,
             String language,
-            String voice,
-            Path audioFile
-    ) throws IOException, InterruptedException {
+            String voice) throws Exception {
 
-        String apiKey = System.getenv("SARVAM_API_KEY");
+        String model = getPiperModel(language, voice);
 
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new IOException(
-                    "SARVAM_API_KEY environment variable is not set"
-            );
-        }
+        Path outputDirectory =
+                Paths.get("generated-audio");
 
-        String speaker;
+        Files.createDirectories(outputDirectory);
 
-        if (voice != null && voice.equalsIgnoreCase("male")) {
-            speaker = "ratan";
-        } else {
-            speaker = "priya";
-        }
+        String fileName =
+                "piper-" + System.currentTimeMillis() + ".wav";
 
-        JSONObject requestJson = new JSONObject();
+        Path audioFile =
+                outputDirectory.resolve(fileName);
 
-        requestJson.put("text", text);
-        requestJson.put("target_language_code", language);
-        requestJson.put("speaker", speaker);
-        requestJson.put("model", "bulbul:v3");
-        requestJson.put("speech_sample_rate", 22050);
-        requestJson.put("output_audio_codec", "wav");
-
-        System.out.println(
-                "Sarvam language: " + language
-                        + " | Voice: " + voice
-                        + " | Speaker: " + speaker
-        );
-
-        HttpClient client = HttpClient.newHttpClient();
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(
-                        "https://api.sarvam.ai/text-to-speech"
-                ))
-                .header(
-                        "api-subscription-key",
-                        apiKey
-                )
-                .header(
-                        "Content-Type",
-                        "application/json"
-                )
-                .POST(
-                        HttpRequest.BodyPublishers.ofString(
-                                requestJson.toString()
-                        )
-                )
-                .build();
-
-        HttpResponse<String> response =
-                client.send(
-                        request,
-                        HttpResponse.BodyHandlers.ofString()
+        /*
+         * Create a UTF-8 input file.
+         * This avoids Windows stdin encoding problems.
+         */
+        Path inputFile =
+                outputDirectory.resolve(
+                        "piper-input-" + System.currentTimeMillis() + ".txt"
                 );
 
-        System.out.println(
-                "Sarvam response status: "
-                        + response.statusCode()
+        String safeText = removeInvalidUnicode(text);
+
+        Files.writeString(
+                inputFile,
+                safeText,
+                StandardCharsets.UTF_8
         );
 
-        if (response.statusCode() < 200
-                || response.statusCode() >= 300) {
-
-            throw new IOException(
-                    "Sarvam TTS failed: "
-                            + response.body()
-            );
-        }
-
-        JSONObject responseJson =
-                new JSONObject(response.body());
-
-        if (!responseJson.has("audios")) {
-            throw new IOException(
-                    "Sarvam response does not contain audio"
-            );
-        }
-
-        String base64Audio =
-                responseJson
-                        .getJSONArray("audios")
-                        .getString(0);
-
-        byte[] audioBytes =
-                Base64.getDecoder().decode(base64Audio);
-
-        Files.write(audioFile, audioBytes);
-    }
-
-    // ============================================================
-    // PIPER TTS
-    // Spanish, French, German
-    // ============================================================
-
-    private void generateWithPiper(
-            String text,
-            String language,
-            String voice,
-            Path audioFile
-    ) throws IOException, InterruptedException {
-
-        boolean isMale =
-                voice != null
-                        && voice.equalsIgnoreCase("male");
-
-        String model;
-
-        // --------------------------------------------------------
-        // SPANISH
-        // --------------------------------------------------------
-        if (language.equalsIgnoreCase("es-ES")) {
-
-            if (isMale) {
-                model = "es_ES-davefx-medium";
-            } else {
-                model = "es_AR-daniela-high";
-            }
-
-        // --------------------------------------------------------
-        // FRENCH
-        // --------------------------------------------------------
-        } else if (language.equalsIgnoreCase("fr-FR")) {
-
-            if (isMale) {
-                model = "fr_FR-siwis-medium";
-            } else {
-                model = "fr_FR-gilles-low";
-            }
-
-        // --------------------------------------------------------
-        // GERMAN
-        // --------------------------------------------------------
-        } else if (language.equalsIgnoreCase("de-DE")) {
-
-            if (isMale) {
-                model = "de_DE-thorsten-medium";
-            } else {
-                model = "de_DE-kerstin-low";
-            }
-
-        } else {
-            throw new IOException(
-                    "Piper does not support language: "
-                            + language
-            );
-        }
-
-        System.out.println(
-                "========================================"
+        ProcessBuilder processBuilder = new ProcessBuilder(
+                "python",
+                "-m",
+                "piper",
+                "-m",
+                model,
+                "--input_file",
+                inputFile.toAbsolutePath().toString(),
+                "--output_file",
+                audioFile.toAbsolutePath().toString()
         );
-
-        System.out.println(
-                "Piper language: " + language
-        );
-
-        System.out.println(
-                "Selected voice: " + voice
-        );
-
-        System.out.println(
-                "Selected Piper model: " + model
-        );
-
-        System.out.println(
-                "========================================"
-        );
-
-        ProcessBuilder processBuilder =
-                new ProcessBuilder(
-                        "python",
-                        "-m",
-                        "piper",
-                        "-m",
-                        model,
-                        "--output_file",
-                        audioFile.toAbsolutePath().toString()
-                );
 
         processBuilder.redirectErrorStream(true);
 
-        Process process =
-                processBuilder.start();
+        Process process = processBuilder.start();
 
-        // Send text to Piper
-        process.getOutputStream().write(
-                text.getBytes(StandardCharsets.UTF_8)
-        );
-
-        process.getOutputStream().close();
-
-        // Read Piper output
-        String output =
+        String processOutput =
                 new String(
                         process.getInputStream().readAllBytes(),
                         StandardCharsets.UTF_8
@@ -284,33 +77,136 @@ public class TtsService {
 
         int exitCode = process.waitFor();
 
-        System.out.println(
-                "Piper exit code: " + exitCode
-        );
+        System.out.println("Piper model: " + model);
+        System.out.println("Piper input file: "
+                + inputFile.toAbsolutePath());
+        System.out.println("Piper output:");
+        System.out.println(processOutput);
 
-        if (!output.trim().isEmpty()) {
-            System.out.println(
-                    "Piper output: " + output
-            );
+        /*
+         * Delete temporary input file
+         */
+        try {
+            Files.deleteIfExists(inputFile);
+        } catch (Exception ignored) {
         }
 
         if (exitCode != 0) {
-            throw new IOException(
-                    "Piper TTS failed: " + output
+            throw new RuntimeException(
+                    "Piper TTS failed: " + processOutput
             );
         }
 
-        if (!Files.exists(audioFile)
-                || Files.size(audioFile) == 0) {
-
-            throw new IOException(
-                    "Piper did not generate audio file"
+        if (!Files.exists(audioFile)) {
+            throw new RuntimeException(
+                    "Piper did not create the audio file."
             );
         }
 
         System.out.println(
-                "Piper audio generated successfully: "
-                        + audioFile
+                "Audio saved: "
+                        + audioFile.toAbsolutePath()
         );
+
+        return fileName;
+    }
+
+    private String removeInvalidUnicode(String text) {
+
+        if (text == null) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+
+            char current = text.charAt(i);
+
+            /*
+             * Normal character
+             */
+            if (!Character.isSurrogate(current)) {
+                result.append(current);
+                continue;
+            }
+
+            /*
+             * Valid surrogate pair
+             */
+            if (Character.isHighSurrogate(current)
+                    && i + 1 < text.length()
+                    && Character.isLowSurrogate(
+                            text.charAt(i + 1))) {
+
+                result.append(current);
+                result.append(text.charAt(i + 1));
+
+                i++;
+            }
+
+            /*
+             * Invalid surrogate is ignored.
+             */
+        }
+
+        return result.toString();
+    }
+
+    private String getPiperModel(
+            String language,
+            String voice) {
+
+        boolean female =
+                voice != null
+                        && voice.equalsIgnoreCase("female");
+
+        switch (language.toLowerCase()) {
+
+            // English
+            case "en-in":
+            case "en-us":
+                return female
+                        ? "en_US-hfc_female-medium"
+                        : "en_US-hfc_male-medium";
+
+            // Hindi
+            case "hi-in":
+                return female
+                        ? "hi_IN-priyamvada-medium"
+                        : "hi_IN-pratham-medium";
+
+            // Gujarati
+            case "gu-in":
+                return "gu_IN-dhwani-medium";
+
+            // Marathi
+            case "mr-in":
+                return "mr_IN-google-medium";
+
+            // Telugu
+            case "te-in":
+                return female
+                        ? "te_IN-padmavathi-medium"
+                        : "te_IN-venkatesh-medium";
+
+            // Spanish
+            case "es-es":
+                return "es_ES-davefx-medium";
+
+            // French
+            case "fr-fr":
+                return "fr_FR-siwis-medium";
+
+            // German
+            case "de-de":
+                return "de_DE-kerstin-low";
+
+            default:
+                throw new RuntimeException(
+                        "No Piper model configured for language: "
+                                + language
+                );
+        }
     }
 }
