@@ -1,3 +1,4 @@
+
 package com.example.tts;
 
 import java.nio.charset.StandardCharsets;
@@ -10,10 +11,21 @@ import org.springframework.stereotype.Service;
 @Service
 public class TtsService {
 
+    private static final String WINDOWS_PYTHON_PATH =
+            "C:\\Users\\DELL\\AppData\\Local\\Python\\bin\\python.exe";
+
     public String generateAudio(
             String text,
             String language,
             String voice) throws Exception {
+
+        if (text == null || text.trim().isEmpty()) {
+            throw new RuntimeException("Text cannot be empty.");
+        }
+
+        if (language == null || language.trim().isEmpty()) {
+            throw new RuntimeException("Language cannot be empty.");
+        }
 
         return generateWithPiper(text, language, voice);
     }
@@ -25,24 +37,22 @@ public class TtsService {
 
         String model = getPiperModel(language, voice);
 
-        Path outputDirectory =
-                Paths.get("generated-audio");
+        Path outputDirectory = Paths.get("generated-audio");
 
         Files.createDirectories(outputDirectory);
 
+        String timestamp =
+                String.valueOf(System.currentTimeMillis());
+
         String fileName =
-                "piper-" + System.currentTimeMillis() + ".wav";
+                "piper-" + timestamp + ".wav";
 
         Path audioFile =
                 outputDirectory.resolve(fileName);
 
-        /*
-         * Create a UTF-8 input file.
-         * This avoids Windows stdin encoding problems.
-         */
         Path inputFile =
                 outputDirectory.resolve(
-                        "piper-input-" + System.currentTimeMillis() + ".txt"
+                        "piper-input-" + timestamp + ".txt"
                 );
 
         String safeText = removeInvalidUnicode(text);
@@ -53,17 +63,36 @@ public class TtsService {
                 StandardCharsets.UTF_8
         );
 
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                "python",
-                "-m",
-                "piper",
-                "-m",
-                model,
-                "--input_file",
-                inputFile.toAbsolutePath().toString(),
-                "--output_file",
-                audioFile.toAbsolutePath().toString()
+        String pythonCommand = getPythonCommand();
+
+        System.out.println("--------------------------------");
+        System.out.println("Starting Piper TTS");
+        System.out.println("Operating System: "
+                + System.getProperty("os.name"));
+        System.out.println("Python Command: "
+                + pythonCommand);
+        System.out.println("Language: " + language);
+        System.out.println("Voice: " + voice);
+        System.out.println("Model: " + model);
+        System.out.println("Input: " + safeText);
+        System.out.println(
+                "Output: "
+                        + audioFile.toAbsolutePath()
         );
+        System.out.println("--------------------------------");
+
+        ProcessBuilder processBuilder =
+                new ProcessBuilder(
+                        pythonCommand,
+                        "-m",
+                        "piper",
+                        "-m",
+                        model,
+                        "--input_file",
+                        inputFile.toAbsolutePath().toString(),
+                        "--output_file",
+                        audioFile.toAbsolutePath().toString()
+                );
 
         processBuilder.redirectErrorStream(true);
 
@@ -77,15 +106,13 @@ public class TtsService {
 
         int exitCode = process.waitFor();
 
-        System.out.println("Piper model: " + model);
-        System.out.println("Piper input file: "
-                + inputFile.toAbsolutePath());
+        System.out.println(
+                "Piper exit code: " + exitCode
+        );
+
         System.out.println("Piper output:");
         System.out.println(processOutput);
 
-        /*
-         * Delete temporary input file
-         */
         try {
             Files.deleteIfExists(inputFile);
         } catch (Exception ignored) {
@@ -103,54 +130,44 @@ public class TtsService {
             );
         }
 
+        if (Files.size(audioFile) == 0) {
+            throw new RuntimeException(
+                    "Piper created an empty audio file."
+            );
+        }
+
         System.out.println(
-                "Audio saved: "
+                "Piper audio saved successfully: "
                         + audioFile.toAbsolutePath()
         );
 
         return fileName;
     }
 
-    private String removeInvalidUnicode(String text) {
+    private String getPythonCommand() {
 
-        if (text == null) {
-            return "";
-        }
+        String operatingSystem =
+                System.getProperty("os.name")
+                        .toLowerCase();
 
-        StringBuilder result = new StringBuilder();
+        // Windows
+        if (operatingSystem.contains("win")) {
 
-        for (int i = 0; i < text.length(); i++) {
+            Path windowsPython =
+                    Paths.get(WINDOWS_PYTHON_PATH);
 
-            char current = text.charAt(i);
-
-            /*
-             * Normal character
-             */
-            if (!Character.isSurrogate(current)) {
-                result.append(current);
-                continue;
+            if (!Files.exists(windowsPython)) {
+                throw new RuntimeException(
+                        "Python was not found at: "
+                                + WINDOWS_PYTHON_PATH
+                );
             }
 
-            /*
-             * Valid surrogate pair
-             */
-            if (Character.isHighSurrogate(current)
-                    && i + 1 < text.length()
-                    && Character.isLowSurrogate(
-                            text.charAt(i + 1))) {
-
-                result.append(current);
-                result.append(text.charAt(i + 1));
-
-                i++;
-            }
-
-            /*
-             * Invalid surrogate is ignored.
-             */
+            return WINDOWS_PYTHON_PATH;
         }
 
-        return result.toString();
+        // Linux / Render
+        return "python3";
     }
 
     private String getPiperModel(
@@ -166,47 +183,102 @@ public class TtsService {
             // English
             case "en-in":
             case "en-us":
-                return female
-                        ? "en_US-hfc_female-medium"
-                        : "en_US-hfc_male-medium";
+            case "en-gb":
+
+                if (female) {
+                    return "en_US-lessac-medium";
+                }
+
+                return "en_US-ryan-medium";
 
             // Hindi
             case "hi-in":
-                return female
-                        ? "hi_IN-priyamvada-medium"
-                        : "hi_IN-pratham-medium";
+
+                if (female) {
+                    return "hi_IN-priyamvada-medium";
+                }
+
+                return "hi_IN-pratham-medium";
 
             // Gujarati
             case "gu-in":
-                return "gu_IN-dhwani-medium";
+
+                throw new RuntimeException(
+                        "Gujarati Piper voice needs to be configured."
+                );
 
             // Marathi
             case "mr-in":
-                return "mr_IN-google-medium";
 
-            // Telugu
-            case "te-in":
-                return female
-                        ? "te_IN-padmavathi-medium"
-                        : "te_IN-venkatesh-medium";
+                return "mr_IN-google-medium";
 
             // Spanish
             case "es-es":
-                return "es_ES-davefx-medium";
 
-            // French
-            case "fr-fr":
-                return "fr_FR-siwis-medium";
+                return "es_ES-davefx-medium";
 
             // German
             case "de-de":
-                return "de_DE-kerstin-low";
+
+                if (female) {
+                    return "de_DE-kerstin-low";
+                }
+
+                return "de_DE-thorsten-medium";
+
+            // French
+            case "fr-fr":
+
+                return "fr_FR-siwis-medium";
 
             default:
+
                 throw new RuntimeException(
-                        "No Piper model configured for language: "
+                        "Piper model is not configured for language: "
                                 + language
                 );
         }
     }
+
+    private String removeInvalidUnicode(String text) {
+
+        if (text == null) {
+            return "";
+        }
+
+        StringBuilder result =
+                new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+
+            char current = text.charAt(i);
+
+            if (!Character.isSurrogate(current)) {
+
+                result.append(current);
+
+                continue;
+            }
+
+            if (
+                    Character.isHighSurrogate(current)
+                            && i + 1 < text.length()
+                            && Character.isLowSurrogate(
+                                    text.charAt(i + 1)
+                            )
+            ) {
+
+                result.append(current);
+
+                result.append(
+                        text.charAt(i + 1)
+                );
+
+                i++;
+            }
+        }
+
+        return result.toString();
+    }
 }
+

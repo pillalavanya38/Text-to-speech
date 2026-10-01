@@ -1,6 +1,8 @@
 
 import "./App.css";
+
 import { useEffect, useRef, useState } from "react";
+
 import Login from "./Login";
 
 function App() {
@@ -19,8 +21,8 @@ function App() {
 
   const maxCharacters = 1000;
 
-  const API_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:8080";
+  // Local Spring Boot backend
+  const API_URL = "https://text-to-speech-backend-2lf8.onrender.com";
 
   const languages = [
     { value: "en-IN", label: "English" },
@@ -43,8 +45,8 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem("ttsUser");
-    setLoggedInUser(null);
 
+    setLoggedInUser(null);
     setText("");
     setHasGenerated(false);
 
@@ -87,9 +89,11 @@ function App() {
         `${API_URL}/api/tts/generate`,
         {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             text: text,
             language: language,
@@ -106,16 +110,20 @@ function App() {
         );
       }
 
-      const generatedAudioUrl = `${API_URL}${data.audioUrl}`;
+      const generatedAudioUrl =
+        `${API_URL}${data.audioUrl}`;
 
       setAudioUrl(generatedAudioUrl);
       setHasGenerated(true);
+
     } catch (error) {
       console.error("TTS Error:", error);
 
       alert(
-        error.message || "Unable to generate speech."
+        error.message ||
+        "Unable to generate speech."
       );
+
     } finally {
       setIsSpeaking(false);
     }
@@ -137,28 +145,26 @@ function App() {
     }
   };
 
-  const wordCount =
-    text.trim() === ""
-      ? 0
-      : text.trim().split(/\s+/).length;
-
-  const characterCount = text.length;
-
   if (!loggedInUser) {
     return <Login onLogin={handleLogin} />;
   }
 
   return (
-    <div className="app">
-      <div className="container">
+    <div className="app-container">
 
-        <div className="top-bar">
-          <div>
-            <h1>Text-to-Speech Application</h1>
-            <p className="subtitle">
-              Convert your text into natural speech
-            </p>
-          </div>
+      <header className="app-header">
+
+        <div>
+          <h1>Text-to-Speech Application</h1>
+
+          <p>
+            Convert your text into natural speech
+          </p>
+        </div>
+
+        <div className="user-section">
+
+          <span>{loggedInUser}</span>
 
           <button
             className="logout-button"
@@ -166,139 +172,159 @@ function App() {
           >
             Logout
           </button>
+
         </div>
 
-        <div className="user-info">
-          Logged in as: <strong>{loggedInUser}</strong>
-        </div>
+      </header>
 
-        <div className="form-group">
-          <label htmlFor="text">
-            Enter Text
-          </label>
+      <main className="tts-container">
 
-          <textarea
-            id="text"
-            value={text}
-            onChange={(e) => {
-              if (e.target.value.length <= maxCharacters) {
-                setText(e.target.value);
-                setHasGenerated(false);
+        <div className="tts-card">
+
+          <div className="input-section">
+
+            <label htmlFor="text">
+              Enter Text
+            </label>
+
+            <textarea
+              id="text"
+              value={text}
+              onChange={(e) =>
+                setText(e.target.value)
               }
-            }}
-            placeholder="Enter the text you want to convert into speech..."
-            rows="8"
-          />
+              placeholder="Enter the text you want to convert into speech..."
+              maxLength={maxCharacters}
+              rows="8"
+            />
 
-          <div className="counter">
-            <span>
-              Words: {wordCount}
-            </span>
+            <div className="text-counter">
 
-            <span>
-              Characters: {characterCount}/{maxCharacters}
-            </span>
+              <span>
+                Characters: {text.length}/{maxCharacters}
+              </span>
+
+              <span>
+                Words:{" "}
+                {text.trim()
+                  ? text.trim().split(/\s+/).length
+                  : 0}
+              </span>
+
+            </div>
+
           </div>
-        </div>
 
-        <div className="form-group">
-          <label htmlFor="language">
-            Select Language
-          </label>
+          <div className="selection-section">
 
-          <select
-            id="language"
-            value={language}
-            onChange={(e) => {
-              setLanguage(e.target.value);
-              setHasGenerated(false);
-            }}
-          >
-            {languages.map((item) => (
-              <option
-                key={item.value}
-                value={item.value}
+            <div className="selection-group">
+
+              <label htmlFor="language">
+                Language
+              </label>
+
+              <select
+                id="language"
+                value={language}
+                onChange={(e) =>
+                  setLanguage(e.target.value)
+                }
               >
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
 
-        <div className="form-group">
-          <label htmlFor="voice">
-            Select Voice
-          </label>
+                {languages.map((lang) => (
+                  <option
+                    key={lang.value}
+                    value={lang.value}
+                  >
+                    {lang.label}
+                  </option>
+                ))}
 
-          <select
-            id="voice"
-            value={voice}
-            onChange={(e) => {
-              setVoice(e.target.value);
-              setHasGenerated(false);
-            }}
-          >
-            {voices.map((item) => (
-              <option
-                key={item.value}
-                value={item.value}
+              </select>
+
+            </div>
+
+            <div className="selection-group">
+
+              <label htmlFor="voice">
+                Voice
+              </label>
+
+              <select
+                id="voice"
+                value={voice}
+                onChange={(e) =>
+                  setVoice(e.target.value)
+                }
               >
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
 
-        <div className="button-container">
-          <button
-            className="generate-button"
-            onClick={handleGenerateSpeech}
-            disabled={isSpeaking}
-          >
-            {isSpeaking
-              ? "Generating..."
-              : "Generate Speech"}
-          </button>
+                {voices.map((item) => (
+                  <option
+                    key={item.value}
+                    value={item.value}
+                  >
+                    {item.label}
+                  </option>
+                ))}
 
-          <button
-            className="clear-button"
-            onClick={handleClear}
-          >
-            Clear
-          </button>
-        </div>
+              </select>
 
-        {hasGenerated && (
-          <div className="success-message">
-            Speech generated successfully.
+            </div>
+
           </div>
-        )}
 
-        {audioUrl && (
-          <div className="audio-section">
-            <h2>Generated Speech</h2>
+          <div className="button-section">
 
-            <audio
-              ref={audioRef}
-              controls
-              src={audioUrl}
-              className="audio-player"
+            <button
+              className="generate-button"
+              onClick={handleGenerateSpeech}
+              disabled={isSpeaking}
             >
-              Your browser does not support the audio element.
-            </audio>
+              {isSpeaking
+                ? "Generating..."
+                : "Generate Speech"}
+            </button>
 
-            <div className="download-container">
+            <button
+              className="clear-button"
+              onClick={handleClear}
+            >
+              Clear
+            </button>
+
+          </div>
+
+          {hasGenerated && audioUrl && (
+
+            <div className="audio-section">
+
+              <h3>Generated Speech</h3>
+
+              <audio
+                ref={audioRef}
+                controls
+                src={audioUrl}
+              >
+                Your browser does not support
+                the audio element.
+              </audio>
+
               <a
-                href={`${audioUrl}/download`}
                 className="download-button"
+                href={`${audioUrl}/download`}
                 download
               >
                 Download Audio
               </a>
+
             </div>
-          </div>
-        )}
-      </div>
+
+          )}
+
+        </div>
+
+      </main>
+
     </div>
   );
 }
