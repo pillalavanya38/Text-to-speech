@@ -18,4 +18,4 @@ curl
 
 # Environment / secrets
 .env
-*.env
+*.envsarvam-response.json
